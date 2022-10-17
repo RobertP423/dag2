@@ -1,0 +1,178 @@
+#!/bin/bash
+#Barebones Tessellation update and start script by RP (SumDumOp)
+#Inspired and heavily influenced by Chris (@zaemliss)
+
+if !(jq --version) >> /dev/null
+then
+echo "Performing onetime dependencies install."
+sudo apt install jq
+fi
+
+DAGdir=/var/tessellation
+
+LBver=$(curl -s http://l0-lb-mainnet.constellationnetwork.io/node/info | jq -r '.version' | awk {'print $NF'})
+MYver=$(java -jar $DAGdir/cl-node.jar --version)
+
+echo "Load balancer Tessellation version: $LBver"
+echo
+echo "Local Tessellation version: $MYver"
+echo
+
+if [[ "$LBver" !=  "$MYver" ]]
+	then
+	echo "Install and launch current version? Y/N"
+	read -e -p " Press [ENTER] to continue or N to cancel: " CHOICE
+	if [[ ("$CHOICE" == "n" || "$CHOICE" == "N") ]]
+                then
+                echo "Aborted."
+                exit 1
+	fi
+
+	echo "Stopping node(s)."
+	sudo killall -9 java
+	sleep 2
+
+#Delete old JARs. Could use wget -O but this is more readable for us non-native linux users.
+
+	echo 'Deleting currently installed JARs'
+	sleep 2
+	sudo rm $DAGdir/cl-dag-l1.jar
+	sudo rm $DAGdir/cl-keytool.jar
+	sudo rm $DAGdir/cl-node.jar
+	sudo rm $DAGdir/cl-wallet.jar
+	sudo rm $DAGdir/mainnet-seedlist
+
+	echo 'Downloading new JARs and set executable'
+
+	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-dag-l1.jar    -P $DAGdir && sudo chmod +x $DAGdir/cl-dag-l1.jar  && echo 'got dag-l1' && sleep 1
+	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-keytool.jar   -P $DAGdir && sudo chmod +x $DAGdir/cl-keytool.jar && echo 'got keytool' && sleep 1
+	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-node.jar      -P $DAGdir && sudo chmod +x $DAGdir/cl-node.jar    && echo 'got node' && sleep 1
+	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-wallet.jar    -P $DAGdir && sudo chmod +x $DAGdir/cl-wallet.jar  && echo 'got wallet' && sleep 1
+	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/mainnet-seedlist -P $DAGdir && echo 'got seedlist' && sleep 2
+
+fi
+
+echo
+echo "After entering your password, this script will"
+echo
+echo "1. Force stop any node processes."
+echo "2. Restart both Layer 0 and Layer 1 node services."
+echo "3. Join both Layer 0 and Layer 1 clusters via Constellation Network's load balancers."
+echo
+echo "NOTE: This script assumes you have already properly created and configured all required scripts, services, wallets, etc either using nodectl or manually as per official Tessellation documentation."
+echo "Its intended use is as an expedited method of restarting a node after a load balancer reboot, tessellation version upgrade, or VPS reboot."
+echo
+echo "Press ctrl+c to cancel."
+
+read -s -p "Password for node's p12 file :" PASS
+echo
+export CL_PASSWORD="$PASS"
+
+echo "Stopping node(s)."
+sudo killall -9 java
+sleep 2
+
+echo "Starting layer 0 node service"
+sudo systemctl start node_l0
+sleep 3
+
+if (sudo systemctl -q is-active node_l0)
+        then
+        echo "Layer 0 service successfully started."
+        else
+        echo "Failed to start layer 0 node service." && exit 1
+fi
+
+function waitforl0()
+	{
+	l0state=$(curl -s http://127.0.0.1:9000/node/info | jq -r '.state' | awk {'print $NF'})
+	echo "Waiting for node state ReadyToJoin. Currently: $l0state"
+	echo
+
+	if [[ $l0state != ReadyToJoin ]]
+                then
+                sleep 3
+                waitforl0
+        fi
+
+        }
+
+waitforl0
+
+lb0ip=$(curl -s http://l0-lb-mainnet.constellationnetwork.io/node/info | jq -r '.host' | awk {'print $NF'})
+lb0id=$(curl -s http://l0-lb-mainnet.constellationnetwork.io/node/info | jq -r '.id' | awk {'print $NF'})
+
+echo "Issuing join command to local layer 0 node."
+
+curl -X POST http://127.0.0.1:9002/cluster/join -H 'Content-type: application/json' -d '{ "id": "'$lb0id'", "ip": "'$lb0ip'", "p2pPort": 9001 }' && sleep 10
+
+function waitforl0again()
+	{
+	l0state=$(curl -s http://127.0.0.1:9000/node/info | jq -r '.state' | awk {'print $NF'})
+	echo
+	echo "Waiting for node state Ready. Currently: $l0state"
+	echo
+        if [[ $l0state != Ready ]]
+        	then
+        	sleep 15
+        	waitforl0again
+        fi
+
+	}
+
+waitforl0again
+
+echo "Starting Layer 1 node service."
+sudo systemctl start node_l1
+
+sleep 3
+
+if (sudo systemctl -q is-active node_l1)
+        then
+        echo "Layer 1 service successfully started."
+        else
+        echo "Failed to start layer 1 node service. " && exit 1
+fi
+
+function waitforl1()
+	{
+	l1state=$(curl -s http://127.0.0.1:9010/node/info | jq -r '.state' | awk {'print $NF'})
+	echo
+	echo "Waiting for node state ReadyToJoin. Currently $l1state"
+	echo
+
+	if [[ $l1state != ReadyToJoin ]]
+		then
+		sleep 3
+		waitforl1
+	fi
+	}
+
+waitforl1
+
+lb1ip=$(curl -s http://l1-lb-mainnet.constellationnetwork.io/node/info | jq -r '.host' | awk {'print $NF'})
+lb1id=$(curl -s http://l1-lb-mainnet.constellationnetwork.io/node/info | jq -r '.id' | awk {'print $NF'})
+
+echo "Issuing join command to local layer 1 node."
+
+curl -X POST http://127.0.0.1:9012/cluster/join -H 'Content-type: application/json' -d '{ "id": "'$lb1id'", "ip": "'$lb1ip'", "p2pPort": 9011 }' && sleep 10
+
+function waitforl1again()
+	{
+	l1state=$(curl -s http://127.0.0.1:9010/node/info | jq -r '.state' | awk {'print $NF'})
+	echo
+	echo "Waiting for node state Ready. Currently $l1state"
+	echo
+
+	if [[ $l1state != Ready ]]
+		then
+		sleep 10
+		waitforl1again
+	fi
+	}
+
+waitforl1again
+
+export CL_PASSWORD=""
+
+echo "Layer 0 and 1 nodes successfully joined."
