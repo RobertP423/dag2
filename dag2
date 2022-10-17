@@ -2,12 +2,6 @@
 #Barebones Tessellation update and start script by RP (SumDumOp)
 #Inspired and heavily influenced by Chris (@zaemliss)
 
-if !(jq --version) >> /dev/null
-then
-echo "Performing onetime dependencies install."
-sudo apt install jq
-fi
-
 DAGdir=/var/tessellation
 
 LBver=$(curl -s http://l0-lb-mainnet.constellationnetwork.io/node/info | jq -r '.version' | awk {'print $NF'})
@@ -44,11 +38,11 @@ if [[ "$LBver" !=  "$MYver" ]]
 
 	echo 'Downloading new JARs and set executable'
 
-	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-dag-l1.jar    -P $DAGdir && sudo chmod +x $DAGdir/cl-dag-l1.jar  && echo 'got dag-l1' && sleep 1
-	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-keytool.jar   -P $DAGdir && sudo chmod +x $DAGdir/cl-keytool.jar && echo 'got keytool' && sleep 1
-	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-node.jar      -P $DAGdir && sudo chmod +x $DAGdir/cl-node.jar    && echo 'got node' && sleep 1
-	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-wallet.jar    -P $DAGdir && sudo chmod +x $DAGdir/cl-wallet.jar  && echo 'got wallet' && sleep 1
-	sudo wget -s https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/mainnet-seedlist -P $DAGdir && echo 'got seedlist' && sleep 2
+	sudo wget -q https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-dag-l1.jar    -P $DAGdir && sudo chmod +x $DAGdir/cl-dag-l1.jar  && echo 'got dag-l1' && sleep 1
+	sudo wget -q https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-keytool.jar   -P $DAGdir && sudo chmod +x $DAGdir/cl-keytool.jar && echo 'got keytool' && sleep 1
+	sudo wget -q https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-node.jar      -P $DAGdir && sudo chmod +x $DAGdir/cl-node.jar    && echo 'got node' && sleep 1
+	sudo wget -q https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/cl-wallet.jar    -P $DAGdir && sudo chmod +x $DAGdir/cl-wallet.jar  && echo 'got wallet' && sleep 1
+	sudo wget -q https://github.com/Constellation-Labs/tessellation/releases/download/v$LBver/mainnet-seedlist -P $DAGdir && echo 'got seedlist' && sleep 2
 
 fi
 
