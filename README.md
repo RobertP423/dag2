@@ -1,6 +1,6 @@
-Installation
+Installation - This will also install a utility/dependency called 'jq.'
 ```
-sudo wget https://github.com/SumDumOp/dag2/raw/main/dag2 -O /usr/local/bin/dag2 && sudo chmod +x /usr/local/bin/dag2
+sudo wget https://github.com/SumDumOp/dag2/raw/main/dag2 -O /usr/local/bin/dag2 && sudo chmod +x /usr/local/bin/dag2 && sudo apt install jq
 ```
 
 Usage
